@@ -1,4 +1,7 @@
 export async function createRssFeed(baseUrl, magnetInfo, request) {
+	const offset = Number.parseInt(request.offset, 10) || 0;
+	const total = magnetInfo.length;
+
 	const feedObject = {
 		rss: [
 			{
@@ -29,69 +32,71 @@ export async function createRssFeed(baseUrl, magnetInfo, request) {
 					{
 						'torznab:response': {
 							_attr: {
-								offset: request.offset >= 50 ? 0 : 0,
-								total: request.offset >= 50 ? 0 : 1,
+								offset,
+								total,
 							},
 						},
 					},
-					request?.offset < 50
-						? {
-							language: 'en-US',
-						}
-						: {},
-					request?.offset < 50
-						? {
-							category: 2000,
-						}
-						: {},
-					...((request?.offset || 0) < 50
-						? magnetInfo.map(post => {
-							const feedItem = {
-								item: [
-									{title: post.name},
-									{
-										description: {
-											_cdata: post.name,
+					{
+						language: 'en-US',
+					},
+					{
+						category: 2000,
+					},
+					...(magnetInfo.map(post => {
+						const feedItem = {
+							item: [
+								{title: post.name},
+								{
+									description: {
+										_cdata: post.name,
+									},
+								},
+								{
+									link: post.torrentPath,
+								},
+								{
+									guid: [
+										{_attr: {isPermaLink: 'false'}},
+										post.guid,
+									],
+								},
+								{
+									pubDate: post.publishedDate,
+								},
+								{
+									enclosure: {
+										_attr: {
+											url: post.torrentPath,
+											type: 'application/x-bittorrent',
+											length: post.torrentSize || '10000',
 										},
 									},
-									{
-										link: post.torrentPath,
+								},
+								{comments: post.name},
+								{'torznab:attr': {_attr: {name: 'magneturl', value: post.magnet}}},
+								{
+									'torznab:attr': {_attr: {name: 'seeders', value: 10}},
+								},
+								{
+									'torznab:attr': {
+										_attr: {name: 'leechers', value: 10},
 									},
-									{
-										guid: post.guid,
+								},
+								{
+									'torznab:attr': {
+										_attr: {name: 'size', value: post.torrentSize || '0'},
 									},
-									{
-										pubDate: post.publishedDate,
+								},
+								{
+									'torznab:attr': {
+										_attr: {name: 'category', value: '2000'},
 									},
-									{
-										enclosure: {
-											_attr: {
-												url: post.torrentPath,
-												type: 'application/x-bittorrent',
-												length: '10000',
-											},
-										},
-									},
-									{comments: post.name},
-									{'torznab:attr': {_attr: {name: 'magneturl', value: post.magnet}}},
-									{
-										'torznab:attr': {_attr: {name: 'seeders', value: 10}},
-									},
-									{
-										'torznab:attr': {
-											_attr: {name: 'leechers', value: 10},
-										},
-									},
-									{
-										'torznab:attr': {
-											_attr: {name: 'size', value: post.torrentSize},
-										},
-									},
-								],
-							};
-							return feedItem;
-						})
-						: {}),
+								},
+							],
+						};
+						return feedItem;
+					})),
 				],
 			},
 		],
@@ -123,37 +128,20 @@ export async function torznabTest() {
 					},
 				],
 			},
-			{categories: []},
+			{
+				categories: [
+					{
+						category: [
+							{_attr: {id: '2000', name: 'Movies'}},
+							{category: {_attr: {id: '2010', name: 'Movies/Foreign'}}},
+							{category: {_attr: {id: '2030', name: 'Movies/HD'}}},
+							{category: {_attr: {id: '2040', name: 'Movies/SD'}}},
+						],
+					},
+				],
+			},
 		],
 	};
-
-	const categoriesObject = xmlString.caps.find(item => 'categories' in item);
-	const categoriesXml = categoriesObject ? categoriesObject.categories : [];
-
-	for (const category of [
-		{
-			pid: 0,
-			id: 2000,
-			name: 'Movies',
-		},
-	]) {
-		if (category.pid === 0) {
-			categoriesXml.push({
-				category: [{_attr: {id: category.id, name: category.name}}],
-			});
-		} else {
-			const parentCat = categoriesXml.find(object =>
-				object.category && object.category.some(objc =>
-					objc._attr !== undefined && objc._attr.id === category.pid,
-				),
-			);
-			if (parentCat) {
-				parentCat.category.push({
-					subcat: [{_attr: {id: category.id, name: category.name}}],
-				});
-			}
-		}
-	}
 
 	return xmlString;
 }

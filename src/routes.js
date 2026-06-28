@@ -1,6 +1,6 @@
 import express from 'express';
 import xml from 'xml';
-import {XMLBuilder, XMLParser} from 'fast-xml-parser';
+
 import {getConfig, updateConfig} from './db.js';
 import {GLOBAL_SETTINGS} from './config.js';
 import {
@@ -13,7 +13,7 @@ import {createRssFeed, torznabTest, noTopics} from './torznab.js';
 const router = new express.Router();
 
 const processKeyword = key => {
-	const searchKey = key?.toString()?.trim()?.split(' ')?.[0] || '';
+	const searchKey = key?.toString()?.trim() || '';
 	if (searchKey) {
 		return encodeURIComponent(searchKey);
 	}
@@ -112,72 +112,59 @@ router.get('/api', async (request, response) => {
 	const baseUrl = request.protocol + '://' + request.get('host');
 	const testMode = request.query.t === 'caps';
 
-	const keyword = (!testMode && configs.custom_search)
+	if (testMode) {
+		try {
+			const rssFeed = await torznabTest();
+			const xmlContent = '<?xml version="1.0" encoding="UTF-8" ?>\n' + xml(rssFeed, {indent: true});
+			response.set('Content-Type', 'text/xml');
+			return response.send(xmlContent);
+		} catch (error) {
+			console.error('Error generating torznab caps:', error.message);
+			return response.status(500).json({
+				message: 'Could not get caps',
+				status: 'FAILED',
+			});
+		}
+	}
+
+	const keyword = configs.custom_search
 		? encodeURIComponent(configs.custom_search_keyword)
 		: processKeyword(request.query.q) || 'drishyam 4';
 	console.log('Keyword:', keyword);
 
 	let rssFeed;
 	try {
-		const searchResults = await searchMovies(keyword);
-		try {
-			if (testMode) {
-				rssFeed = await torznabTest();
-			} else if (request.query.offset >= 50) {
-				rssFeed = await noTopics(baseUrl);
-			} else if (
-				configs.custom_search
-        && hasNonEnglishCharacters(request.query.q)
-			) {
-				rssFeed = await noTopics(baseUrl);
-			} else {
-				const topics = searchResults
-					.filter(result => Boolean(result.starter_role))
-					.map(result => ({
-						url: getTopicUrl(result.tid, result.title, tamilMvUrl),
-						title: result.title,
-					}));
+		if (request.query.offset >= 50 || (configs.custom_search && hasNonEnglishCharacters(request.query.q))) {
+			rssFeed = await noTopics(baseUrl);
+		} else {
+			const searchResults = await searchMovies(keyword);
+			const topics = searchResults
+				.filter(result => Boolean(result.starter_role))
+				.map(result => ({
+					url: getTopicUrl(result.tid, result.title, tamilMvUrl),
+					title: result.title,
+				}));
 
-				if (topics.length > 0) {
-					const magnetInfo = await scrapTorrents(topics, keyword);
-					rssFeed = magnetInfo.length > 0
-						? await createRssFeed(baseUrl, magnetInfo, request.query)
-						: await noTopics(baseUrl);
-				} else {
-					rssFeed = await noTopics(baseUrl);
-				}
+			if (topics.length > 0) {
+				const magnetInfo = await scrapTorrents(topics, keyword);
+				rssFeed = magnetInfo.length > 0
+					? await createRssFeed(baseUrl, magnetInfo, request.query)
+					: await noTopics(baseUrl);
+			} else {
+				rssFeed = await noTopics(baseUrl);
 			}
-		} catch (scrapError) {
-			console.error('Error fetching topics / scraping torrents:', scrapError.message);
-			return response.status(529).json({
-				message: 'Could not get topics',
-				status: 'FAILED',
-			});
 		}
-	} catch (searchError) {
-		console.error(`Error connecting to search API at ${tamilMvUrl}:`, searchError.message);
-		return response.status(521).json({
-			message: `Could not connect to the server ${tamilMvUrl}`,
+	} catch (error) {
+		console.error('Error in /api processing:', error.message);
+		const status = error.message.includes('connect') ? 521 : 529;
+		return response.status(status).json({
+			message: error.message,
 			status: 'FAILED',
 		});
 	}
 
-	const parser = new XMLParser({
-		ignoreAttributes: false,
-		preserveOrder: true,
-		cdataPropName: '__cdata',
-	});
-
-	const feed = `<?xml version="1.0" encoding="UTF-8" ?>${xml(rssFeed)}`;
-	const builder = new XMLBuilder({
-		ignoreAttributes: false,
-		preserveOrder: true,
-		cdataPropName: '__cdata',
-		format: true,
-	});
-	const xmlContent = builder.build(parser.parse(feed));
-
-	response.contentType('Content-Type', 'text/xml');
+	const xmlContent = '<?xml version="1.0" encoding="UTF-8" ?>\n' + xml(rssFeed, {indent: true});
+	response.set('Content-Type', 'text/xml');
 	return response.send(xmlContent);
 });
 
