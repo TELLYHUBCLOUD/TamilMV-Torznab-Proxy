@@ -1,20 +1,20 @@
 import sqlite3 from 'sqlite3';
 import {DEFAULT_TAMILMV_URL} from './config.js';
+import fs from 'node:fs';
+import path from 'node:path';
 
 let db;
 
+
 export function connectDatabase(dbPath = './database/manager.db') {
-	return new Promise((resolve, reject) => {
-		db = new sqlite3.Database(dbPath, error => {
-			if (error) {
-				console.error('Database connection error:', error.message);
-				reject(error);
-			} else {
-				console.log('Connected to the tamilmv manager database.');
-				resolve(db);
-			}
-		});
-	});
+    fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+
+    return new Promise((resolve, reject) => {
+        db = new sqlite3.Database(dbPath, err => {
+            if (err) reject(err);
+            else resolve(db);
+        });
+    });
 }
 
 export function initializeDatabaseSchema() {
