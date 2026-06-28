@@ -70,6 +70,7 @@ router.post('/', async (request, response, next) => {
 			customSearch: request.body.custom_search_toggle === '1',
 			customSearchKeyword:
         request.body.custom_search || previousConfig.custom_search_keyword,
+			apiToken: request.body.api_token || previousConfig.api_token,
 		});
 
 		const loadSettings = await getConfig();
@@ -107,7 +108,16 @@ router.get('/api', async (request, response) => {
 		});
 	}
 
-	const {tamilMvUrl, ...configs} = config;
+	const {tamilMvUrl, apiToken, ...configs} = config;
+
+	// API Token Authentication
+	if (apiToken && request.query.apikey !== apiToken) {
+		return response.status(401).json({
+			message: 'Unauthorized: Invalid API Key',
+			status: 'FAILED',
+		});
+	}
+
 	console.log('query', request.query);
 	const baseUrl = request.protocol + '://' + request.get('host');
 	const testMode = request.query.t === 'caps';

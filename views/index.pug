@@ -48,5 +48,12 @@ html(lang="en")
                             input#custom_search(type="text", name="custom_search", required, class="fields", value=custom_search_keyword, placeholder="movie")
                         .helper-row
                             a(href=tryUrl, target="_blank", class="try-link") 🚀 Try Current Query
+
+                    .input-group
+                        label(for="api_token") 🔑 API Token (apikey)
+                        .input-wrapper
+                            input#api_token(type="text", name="api_token", required, class="fields", value=apiToken, placeholder="your-api-token-here")
+                        .helper-row
+                            span.helper-text Use this token as 'apikey' parameter in your Torznab client.
                     
                     button.btn-submit(type="submit") Save Configuration
